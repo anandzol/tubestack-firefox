@@ -17,29 +17,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify conditions (Main branch & Ignore patch releases)
+      - name: Verify conditions (Main branch & First X.Y release only)
         id: check
         run: |
           TAG_NAME="${{ github.ref_name }}"
           echo "Tag pushed: $TAG_NAME"
 
-          # 1. Check if the tagged commit exists on the main branch
+          # 1. Ensure the tagged commit exists on the main branch
           COMMIT_SHA=$(git rev-parse "$TAG_NAME")
           if ! git branch --remote --contains "$COMMIT_SHA" | grep -q 'origin/main'; then
-            echo "ERROR: Tag $TAG_NAME (commit $COMMIT_SHA) is not on the main branch. Skipping release."
+            echo "ERROR: Tag $TAG_NAME is not on the main branch. Skipping release."
             exit 1
           fi
 
-          # 2. Only release major/minor versions (vX.Y.0 or vX.Y)
-          # Patch versions like v1.2.3 where Z != 0 are skipped.
-          Z_PATCH=$(echo "$TAG_NAME" | cut -d. -f3)
+          # 2. Only release when X or Y changes (i.e. the first tag for a given vX.Y prefix).
+          #    Patch-only bumps (e.g. v0.1.1, v0.1.2) are skipped because the vX.Y prefix
+          #    already has a prior tag. A new minor/major (e.g. v0.2.0, v1.0.0, v2.3.1 when
+          #    the last release was v2.2.x) will have no prior tag under that vX.Y and will release.
+          X=$(echo "$TAG_NAME" | grep -oP '(?<=v)\d+')
+          Y=$(echo "$TAG_NAME" | cut -d. -f2)
 
-          if [ -n "$Z_PATCH" ] && [ "$Z_PATCH" != "0" ]; then
-            echo "INFO: Skipping patch release (Z=$Z_PATCH). Only major/minor versions are released."
+          # Count tags sharing the same vX.Y.* prefix (including the current tag itself)
+          MATCHING=$(git tag --list "v${X}.${Y}.*" | wc -l)
+          echo "Tags found for v${X}.${Y}.*: $MATCHING"
+
+          if [ "$MATCHING" -gt 1 ]; then
+            echo "INFO: A prior release already exists for v${X}.${Y}. This is a patch bump — skipping release."
             exit 1
           fi
 
-          echo "Conditions met. Proceeding with release for $TAG_NAME."
+          echo "First tag under v${X}.${Y} — proceeding with release."
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
