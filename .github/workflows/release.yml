@@ -1,0 +1,80 @@
+name: Build and Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify conditions (Main branch & Ignore patch releases)
+        id: check
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          echo "Tag pushed: $TAG_NAME"
+
+          # 1. Check if the tagged commit exists on the main branch
+          COMMIT_SHA=$(git rev-parse "$TAG_NAME")
+          if ! git branch --remote --contains "$COMMIT_SHA" | grep -q 'origin/main'; then
+            echo "ERROR: Tag $TAG_NAME (commit $COMMIT_SHA) is not on the main branch. Skipping release."
+            exit 1
+          fi
+
+          # 2. Only release major/minor versions (vX.Y.0 or vX.Y)
+          # Patch versions like v1.2.3 where Z != 0 are skipped.
+          Z_PATCH=$(echo "$TAG_NAME" | cut -d. -f3)
+
+          if [ -n "$Z_PATCH" ] && [ "$Z_PATCH" != "0" ]; then
+            echo "INFO: Skipping patch release (Z=$Z_PATCH). Only major/minor versions are released."
+            exit 1
+          fi
+
+          echo "Conditions met. Proceeding with release for $TAG_NAME."
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          echo "Checking build output..."
+          test -f dist/content-bundle.js || { echo "ERROR: dist/content-bundle.js not found"; exit 1; }
+          test -f dist/content-bundle.css || { echo "ERROR: dist/content-bundle.css not found"; exit 1; }
+          test -f dist/background.js     || { echo "ERROR: dist/background.js not found"; exit 1; }
+          test -f dist/popup.html        || { echo "ERROR: dist/popup.html not found"; exit 1; }
+          test -f dist/popup.js          || { echo "ERROR: dist/popup.js not found"; exit 1; }
+          echo "All expected build artifacts present."
+
+      - name: Package extension
+        run: |
+          # Only include files needed for the extension to run.
+          # Excludes screenshots and other repo-only assets.
+          zip -r tubestack-${{ github.ref_name }}.zip \
+            manifest.json \
+            LICENSE \
+            dist/ \
+            assets/icons/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TubeStack ${{ github.ref_name }}
+          files: tubestack-${{ github.ref_name }}.zip
+          generate_release_notes: true
