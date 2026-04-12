@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TubeStack",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Organize your YouTube subscriptions into groups with custom feeds. No API key required.",
   "permissions": [
     "storage",
@@ -17,9 +17,16 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*", "https://youtube.com/*"],
-      "js": ["dist/content-bundle.js"],
-      "css": ["dist/content-bundle.css"],
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://youtube.com/*"
+      ],
+      "js": [
+        "dist/content-bundle.js"
+      ],
+      "css": [
+        "dist/content-bundle.css"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -38,8 +45,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["assets/*"],
-      "matches": ["https://www.youtube.com/*"]
+      "resources": [
+        "assets/*"
+      ],
+      "matches": [
+        "https://www.youtube.com/*"
+      ]
     }
   ]
 }
