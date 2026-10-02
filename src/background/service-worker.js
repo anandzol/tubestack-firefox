@@ -1,11 +1,42 @@
 /**
- * TubeStack — Background Service Worker
+ * TubeStack — Background Script
  * Handles storage, message routing, PocketTube import detection.
  * 
+ * Runs as a Chrome MV3 service worker and as a Firefox MV3 background script.
+ * 
  * Storage strategy:
- *  - chrome.storage.local for everything (no sync quota limits)
+ *  - storage.local for everything (no sync quota limits)
  *  - Auto-migrates from sync to local on first run
  */
+
+// ─── Cross-browser storage helpers ────────────────────────────────────────────
+// Firefox's `chrome.*` namespace is callback-based (it does not return promises),
+// so we wrap the callback form — which works in both Chrome and Firefox — in a
+// promise. This keeps the rest of the background logic browser-agnostic.
+
+function promiseCall(fn, thisArg, ...args) {
+  return new Promise((resolve, reject) => {
+    try {
+      fn.call(thisArg, ...args, (result) => {
+        const err = chrome.runtime.lastError;
+        if (err) reject(new Error(err.message || String(err)));
+        else resolve(result);
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+const storage = {
+  local: {
+    get: (keys) => promiseCall(chrome.storage.local.get, chrome.storage.local, keys),
+    set: (items) => promiseCall(chrome.storage.local.set, chrome.storage.local, items),
+  },
+  sync: {
+    get: (keys) => promiseCall(chrome.storage.sync.get, chrome.storage.sync, keys),
+  },
+};
 
 // ─── Default Data ─────────────────────────────────────────────────────────────
 
@@ -26,9 +57,9 @@ const DEFAULT_STORAGE = {
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
-    const existing = await chrome.storage.local.get(null);
+    const existing = await storage.local.get(null);
     if (!existing.groups) {
-      await chrome.storage.local.set({
+      await storage.local.set({
         groups: DEFAULT_STORAGE.groups,
         channelMap: DEFAULT_STORAGE.channelMap,
         watchedVideos: DEFAULT_STORAGE.watchedVideos,
@@ -42,11 +73,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'update') {
     // Migrate from sync to local if needed
     try {
-      const syncData = await chrome.storage.sync.get(['groups', 'settings']);
+      const syncData = await storage.sync.get(['groups', 'settings']);
       if (syncData.groups && syncData.groups.length > 0) {
-        const localData = await chrome.storage.local.get('groups');
+        const localData = await storage.local.get('groups');
         if (!localData.groups || localData.groups.length === 0) {
-          await chrome.storage.local.set({
+          await storage.local.set({
             groups: syncData.groups,
             settings: { ...DEFAULT_STORAGE.settings, ...syncData.settings },
           });
@@ -77,56 +108,56 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 const messageHandlers = {
   GET_GROUPS: async () => {
-    const data = await chrome.storage.local.get('groups');
+    const data = await storage.local.get('groups');
     return { groups: data.groups || [] };
   },
 
   SAVE_GROUPS: async (payload) => {
-    await chrome.storage.local.set({ groups: payload.groups });
+    await storage.local.set({ groups: payload.groups });
     return { success: true };
   },
 
   GET_CHANNEL_MAP: async () => {
-    const data = await chrome.storage.local.get('channelMap');
+    const data = await storage.local.get('channelMap');
     return { channelMap: data.channelMap || {} };
   },
 
   SAVE_CHANNEL_MAP: async (payload) => {
-    await chrome.storage.local.set({ channelMap: payload.channelMap });
+    await storage.local.set({ channelMap: payload.channelMap });
     return { success: true };
   },
 
   GET_SETTINGS: async () => {
-    const data = await chrome.storage.local.get('settings');
+    const data = await storage.local.get('settings');
     return { settings: { ...DEFAULT_STORAGE.settings, ...data.settings } };
   },
 
   SAVE_SETTINGS: async (payload) => {
-    const existing = await chrome.storage.local.get('settings');
+    const existing = await storage.local.get('settings');
     const merged = { ...DEFAULT_STORAGE.settings, ...existing.settings, ...payload.settings };
-    await chrome.storage.local.set({ settings: merged });
+    await storage.local.set({ settings: merged });
     return { success: true };
   },
 
   GET_WATCHED: async () => {
-    const data = await chrome.storage.local.get('watchedVideos');
+    const data = await storage.local.get('watchedVideos');
     return { watchedVideos: data.watchedVideos || {} };
   },
 
   TOGGLE_WATCHED: async (payload) => {
-    const data = await chrome.storage.local.get('watchedVideos');
+    const data = await storage.local.get('watchedVideos');
     const watched = data.watchedVideos || {};
     if (watched[payload.videoId]) {
       delete watched[payload.videoId];
     } else {
       watched[payload.videoId] = Date.now();
     }
-    await chrome.storage.local.set({ watchedVideos: watched });
+    await storage.local.set({ watchedVideos: watched });
     return { watchedVideos: watched };
   },
 
   EXPORT_DATA: async () => {
-    const data = await chrome.storage.local.get(null);
+    const data = await storage.local.get(null);
     return {
       exportData: {
         ...data,
@@ -157,25 +188,25 @@ const messageHandlers = {
 // ─── Import Handlers ──────────────────────────────────────────────────────────
 
 async function importNativeFormat(data) {
-  const existing = await chrome.storage.local.get(['groups', 'channelMap', 'watchedVideos', 'settings']);
+  const existing = await storage.local.get(['groups', 'channelMap', 'watchedVideos', 'settings']);
   
   if (data.groups) {
     // Merge: add new groups, skip duplicates by name
     const existingNames = new Set((existing.groups || []).map(g => g.name));
     const newGroups = data.groups.filter(g => !existingNames.has(g.name));
     const mergedGroups = [...(existing.groups || []), ...newGroups];
-    await chrome.storage.local.set({ groups: mergedGroups });
+    await storage.local.set({ groups: mergedGroups });
   }
   if (data.channelMap) {
     const merged = { ...(existing.channelMap || {}), ...data.channelMap };
-    await chrome.storage.local.set({ channelMap: merged });
+    await storage.local.set({ channelMap: merged });
   }
   if (data.settings) {
-    await chrome.storage.local.set({ settings: { ...DEFAULT_STORAGE.settings, ...data.settings } });
+    await storage.local.set({ settings: { ...DEFAULT_STORAGE.settings, ...data.settings } });
   }
   if (data.watchedVideos) {
     const merged = { ...(existing.watchedVideos || {}), ...data.watchedVideos };
-    await chrome.storage.local.set({ watchedVideos: merged });
+    await storage.local.set({ watchedVideos: merged });
   }
   
   console.log('[YTSM:SW] Native import complete.');
@@ -194,7 +225,7 @@ function isPocketTubeFormat(data) {
 }
 
 async function importPocketTubeFormat(data) {
-  const existing = await chrome.storage.local.get(['groups', 'channelMap']);
+  const existing = await storage.local.get(['groups', 'channelMap']);
   const existingGroups = existing.groups || [];
   const existingChannelMap = existing.channelMap || {};
   const existingNames = new Set(existingGroups.map(g => g.name));
@@ -252,7 +283,7 @@ async function importPocketTubeFormat(data) {
   }
 
   const mergedGroups = [...existingGroups, ...newGroups];
-  await chrome.storage.local.set({ groups: mergedGroups, channelMap: newChannelMap });
+  await storage.local.set({ groups: mergedGroups, channelMap: newChannelMap });
   
   console.log(`[YTSM:SW] PocketTube import complete: ${newGroups.length} new groups, ${Object.keys(groupEntries).length} total groups processed.`);
   return { success: true, format: 'pockettube', newGroups: newGroups.length };

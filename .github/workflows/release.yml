@@ -59,6 +59,9 @@ jobs:
       - name: Build extension
         run: npm run build
 
+      - name: Build Firefox extension
+        run: npm run build:firefox
+
       - name: Verify build output
         run: |
           echo "Checking build output..."
@@ -67,11 +70,18 @@ jobs:
           test -f dist/background.js     || { echo "ERROR: dist/background.js not found"; exit 1; }
           test -f dist/popup.html        || { echo "ERROR: dist/popup.html not found"; exit 1; }
           test -f dist/popup.js          || { echo "ERROR: dist/popup.js not found"; exit 1; }
-          echo "All expected build artifacts present."
+          echo "All expected Chrome build artifacts present."
+          test -f dist-firefox/manifest.json       || { echo "ERROR: dist-firefox/manifest.json not found"; exit 1; }
+          test -f dist-firefox/content-bundle.js   || { echo "ERROR: dist-firefox/content-bundle.js not found"; exit 1; }
+          test -f dist-firefox/content-bundle.css  || { echo "ERROR: dist-firefox/content-bundle.css not found"; exit 1; }
+          test -f dist-firefox/background.js       || { echo "ERROR: dist-firefox/background.js not found"; exit 1; }
+          test -f dist-firefox/popup.html          || { echo "ERROR: dist-firefox/popup.html not found"; exit 1; }
+          test -f dist-firefox/popup.js            || { echo "ERROR: dist-firefox/popup.js not found"; exit 1; }
+          echo "All expected Firefox build artifacts present."
 
-      - name: Package extension
+      - name: Package extensions
         run: |
-          # Only include files needed for the extension to run.
+          # Chrome/Chromium: manifest.json lives at the root and references dist/.
           # Excludes screenshots and other repo-only assets.
           zip -r tubestack-${{ github.ref_name }}.zip \
             manifest.json \
@@ -79,9 +89,14 @@ jobs:
             dist/ \
             assets/icons/
 
+          # Firefox: dist-firefox/ is self-contained (its own manifest.json).
+          (cd dist-firefox && zip -r ../tubestack-firefox-${{ github.ref_name }}.zip .)
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: TubeStack ${{ github.ref_name }}
-          files: tubestack-${{ github.ref_name }}.zip
+          files: |
+            tubestack-${{ github.ref_name }}.zip
+            tubestack-firefox-${{ github.ref_name }}.zip
           generate_release_notes: true

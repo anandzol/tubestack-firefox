@@ -15,6 +15,14 @@ function Popup() {
     });
   }
 
+  // Callback-based wrapper so this works in Firefox too (its `chrome.*`
+  // namespace does not return promises).
+  function queryTabs(queryInfo) {
+    return new Promise((resolve) => {
+      chrome.tabs.query(queryInfo, (tabs) => resolve(tabs || []));
+    });
+  }
+
   function countGroups(groups) {
     let count = 0;
     for (const g of groups) {
@@ -53,7 +61,7 @@ function Popup() {
 
     async function checkSession() {
       try {
-        const [tab] = await chrome.tabs.query({ url: 'https://www.youtube.com/*' });
+        const [tab] = await queryTabs({ url: 'https://www.youtube.com/*' });
         if (tab) {
           chrome.tabs.sendMessage(tab.id, { type: 'CHECK_SESSION' }, (resp) => {
             if (chrome.runtime.lastError || !resp) {
@@ -79,7 +87,7 @@ function Popup() {
   }, []);
 
   const handleOpenDashboard = async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await queryTabs({ active: true, currentWindow: true });
     if (tab?.url?.includes('youtube.com')) {
       chrome.tabs.sendMessage(tab.id, { type: 'OPEN_DASHBOARD' });
       window.close();

@@ -6,6 +6,9 @@ import { resolve } from 'path';
 const isPopupBuild = process.env.BUILD_TARGET === 'popup';
 const isBgBuild = process.env.BUILD_TARGET === 'background';
 
+// Output directory — overridable so a separate Firefox build can be emitted.
+const OUT_DIR = process.env.OUT_DIR || 'dist';
+
 function getConfig() {
   if (isPopupBuild) {
     return defineConfig({
@@ -13,7 +16,7 @@ function getConfig() {
       root: resolve(__dirname, 'src/popup'),
       base: './',
       build: {
-        outDir: resolve(__dirname, 'dist'),
+        outDir: resolve(__dirname, OUT_DIR),
         emptyOutDir: false,
         rollupOptions: {
           input: resolve(__dirname, 'src/popup/popup.html'),
@@ -31,7 +34,7 @@ function getConfig() {
   if (isBgBuild) {
     return defineConfig({
       build: {
-        outDir: 'dist',
+        outDir: OUT_DIR,
         emptyOutDir: false,
         lib: {
           entry: resolve(__dirname, 'src/background/service-worker.js'),
@@ -49,7 +52,7 @@ function getConfig() {
   return defineConfig({
     plugins: [react()],
     build: {
-      outDir: 'dist',
+      outDir: OUT_DIR,
       emptyOutDir: true,
       rollupOptions: {
         input: resolve(__dirname, 'src/content/content-main.jsx'),

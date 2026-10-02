@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
-    "build": "vite build && BUILD_TARGET=background vite build && BUILD_TARGET=popup vite build && cp -r assets dist/assets 2>/dev/null; echo 'Build complete!'",
+    "build": "node scripts/build.mjs",
+    "build:chrome": "node scripts/build.mjs --browser=chrome",
+    "build:firefox": "node scripts/build.mjs --browser=firefox",
     "build:content": "vite build",
     "build:bg": "BUILD_TARGET=background vite build",
     "build:popup": "BUILD_TARGET=popup vite build"

@@ -53,14 +53,28 @@ Assign specific YouTube channels to your distinct groups with a few simple click
 
 ## Setup and Installation
 
+TubeStack is cross-browser: the same source builds both a Chromium extension (Chrome, Edge, Brave) and a Firefox extension.
+
 ### Option 1: Quick Install (Loading the ZIP)
 
-1. Download the latest compiled `.zip` file from the repository releases.
+**Chrome / Edge / Brave**
+
+1. Download the `tubestack-vX.Y.Z.zip` file from the repository releases.
 2. Extract the contents of the ZIP file to a folder on your computer.
-3. Open your browser and navigate to the extensions page (e.g., `chrome://extensions/` for Chrome/Brave).
+3. Open your browser and navigate to the extensions page (`chrome://extensions/`).
 4. Enable **Developer mode** (usually found in the top right corner).
 5. Click **Load unpacked** and select the extracted folder.
 6. TubeStack is now installed and ready to be set up!
+
+**Firefox**
+
+1. Download the `tubestack-firefox-vX.Y.Z.zip` file from the repository releases and extract it.
+2. Open `about:debugging#/runtime/this-firefox` in Firefox.
+3. Click **Load Temporary Add-on…** and select the extracted `manifest.json`.
+
+   *Temporary add-ons are removed when Firefox closes. For a permanent install, submit the ZIP to [addons.mozilla.org](https://addons.mozilla.org/) or use a [self-distributed signed build](https://extensionworkshop.com/documentation/publish/self-distribution/).*
+
+> **Note:** In Firefox, this MV3 extension uses host permissions for `youtube.com`. When installed from a signed build, Firefox prompts you to grant them; content-script features only work once granted.
 
 ### Option 2: Clean Install from Source 
 
@@ -75,11 +89,22 @@ If you wish to build the extension yourself from its source files, ensure you ha
    ```bash
    npm install
    ```
-4. Build the application for production:
+4. Build the application for your browser:
+
+   **Chrome / Edge / Brave**
    ```bash
    npm run build
    ```
-   *This command will generate a compiled `dist` directory.*
-5. Open your browser and navigate to the extensions page (e.g., `chrome://extensions/`).
-6. Enable **Developer mode**.
-7. Click **Load unpacked** and select the newly created `dist` folder located inside the project directory.
+   *This generates a compiled `dist` directory. The `manifest.json` lives at the project root and references `dist/`.*
+
+   **Firefox**
+   ```bash
+   npm run build:firefox
+   ```
+   *This generates a self-contained `dist-firefox` directory (including its own `manifest.json`).*
+
+5. Open your browser and navigate to the extensions page.
+
+   **Chrome / Edge / Brave:** go to `chrome://extensions/`, enable **Developer mode**, click **Load unpacked**, and select the project root folder (which contains `manifest.json`).
+
+   **Firefox:** go to `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on…**, and select `dist-firefox/manifest.json`.
